@@ -381,7 +381,8 @@ struct FormatToken {
   }
 
   bool isAccessSpecifier(bool ColonRequired = true) const {
-    return isOneOf(tok::kw_public, tok::kw_protected, tok::kw_private) &&
+    return isOneOf(tok::kw_public, tok::kw_protected, tok::kw_private,
+                   tok::kw___published) &&
            (!ColonRequired || (Next && Next->is(tok::colon)));
   }
 
