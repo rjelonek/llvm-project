@@ -2613,13 +2613,32 @@ struct FormatStyle {
   bool ReflowComments;
   // clang-format on
 
-  /// If ``true``, clang-format will sort ``#includes``.
-  /// \code
-  ///    false:                                 true:
-  ///    #include "b.h"                 vs.     #include "a.h"
-  ///    #include "a.h"                         #include "b.h"
-  /// \endcode
-  bool SortIncludes;
+  /// Different styles for sorting includes.
+  enum IncludeSortStyle : unsigned char {
+    /// Do not sort ``#includes``.
+    ISS_DontSort,
+    /// Sort ``#includes`` in case-sensitive lexicographic order.
+    ///
+    /// \code
+    ///   #include "A2.h"
+    ///   #include "B1.h"
+    ///   #include "a1.h"
+    ///   #include "b2.h"
+    /// \endcode
+    ISS_SortCaseSensitive,
+    /// Sort ``#includes`` in case-insensitive lexicographic order.
+    ///
+    /// \code
+    ///   #include "a1.h"
+    ///   #include "A2.h"
+    ///   #include "B1.h"
+    ///   #include "b2.h"
+    /// \endcode
+    ISS_SortCaseInsensitive,
+  };
+
+  /// If ``true``, clang-format will sort ``#includes`` in case-sensitively.
+  IncludeSortStyle SortIncludes;
 
   /// Position for Java Static imports.
   enum SortJavaStaticImportOptions : unsigned char {
@@ -3368,6 +3387,10 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style = getLLVMStyle());
 /// of ``getStyle()``.
 extern const char *StyleOptionHelpDescription;
 
+/// Description to be used for help text for a ``llvm::cl`` option for
+/// specifying include sort style.
+extern const char *IncludeSortStyleOptionHelpDescription;
+
 /// The suggested format style to use by default. This allows tools using
 /// `getStyle` to have a consistent default style.
 /// Different builds can modify the value to the preferred styles.
@@ -3376,6 +3399,10 @@ extern const char *DefaultFormatStyle;
 /// The suggested predefined style to use as the fallback style in `getStyle`.
 /// Different builds can modify the value to the preferred styles.
 extern const char *DefaultFallbackStyle;
+
+/// The suggested predefined include sort style.
+/// Different builds can modify the value to the preferred styles.
+extern const char *DefaultIncludeSortStyle;
 
 /// Construct a FormatStyle based on ``StyleName``.
 ///
@@ -3409,6 +3436,16 @@ llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,
                                      StringRef Code = "",
                                      llvm::vfs::FileSystem *FS = nullptr,
                                      bool AllowUnknownOptions = false);
+
+/// \param[in] IncludeSortStyleName Style name to interpret.
+/// \param[in] AllowUnknownOptions If true, unknown format options only
+///             emit a warning. If false, errors are emitted on unknown format
+///             options.
+/// 
+/// \returns IncludeSortStyle as specified by ``IncludeSortStyleName``. If no style could be
+/// determined, returns an Error.
+llvm::Expected<FormatStyle::IncludeSortStyle>
+getIncludeSortStyle(StringRef IncludeSortStyleName, bool AllowUnknownOptions);
 
 // Guesses the language from the ``FileName`` and ``Code`` to be formatted.
 // Defaults to FormatStyle::LK_Cpp.

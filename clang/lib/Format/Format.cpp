@@ -374,6 +374,19 @@ template <> struct ScalarEnumerationTraits<FormatStyle::PointerAlignmentStyle> {
   }
 };
 
+template <> struct ScalarEnumerationTraits<FormatStyle::IncludeSortStyle> {
+  static void enumeration(IO &IO, FormatStyle::IncludeSortStyle &Value) {
+    IO.enumCase(Value, "DontSort", FormatStyle::ISS_DontSort);
+    IO.enumCase(Value, "SortCaseSensitive", FormatStyle::ISS_SortCaseSensitive);
+    IO.enumCase(Value, "SortCaseInsensitive",
+                FormatStyle::ISS_SortCaseInsensitive);
+
+    // For backward compatibility.
+    IO.enumCase(Value, "true", FormatStyle::ISS_SortCaseSensitive);
+    IO.enumCase(Value, "false", FormatStyle::ISS_DontSort);
+  }
+};
+
 template <>
 struct ScalarEnumerationTraits<FormatStyle::SpaceAroundPointerQualifiersStyle> {
   static void
@@ -1013,7 +1026,7 @@ FormatStyle getLLVMStyle(FormatStyle::LanguageKind Language) {
   LLVMStyle.PenaltyIndentedWhitespace = 0;
 
   LLVMStyle.DisableFormat = false;
-  LLVMStyle.SortIncludes = true;
+  LLVMStyle.SortIncludes = FormatStyle::ISS_SortCaseSensitive;
   LLVMStyle.SortJavaStaticImport = FormatStyle::SJSIO_Before;
   LLVMStyle.SortUsingDeclarations = true;
   LLVMStyle.StatementAttributeLikeMacros.push_back("Q_EMIT");
@@ -1216,7 +1229,7 @@ FormatStyle getChromiumStyle(FormatStyle::LanguageKind Language) {
         "java",
         "javax",
     };
-    ChromiumStyle.SortIncludes = true;
+    ChromiumStyle.SortIncludes = FormatStyle::ISS_SortCaseSensitive;
   } else if (Language == FormatStyle::LK_JavaScript) {
     ChromiumStyle.AllowShortIfStatementsOnASingleLine = FormatStyle::SIS_Never;
     ChromiumStyle.AllowShortLoopsOnASingleLine = false;
@@ -1330,7 +1343,7 @@ FormatStyle getMicrosoftStyle(FormatStyle::LanguageKind Language) {
 FormatStyle getNoStyle() {
   FormatStyle NoStyle = getLLVMStyle();
   NoStyle.DisableFormat = true;
-  NoStyle.SortIncludes = false;
+  NoStyle.SortIncludes = FormatStyle::ISS_DontSort;
   NoStyle.SortUsingDeclarations = false;
   return NoStyle;
 }
@@ -2209,10 +2222,20 @@ static void sortCppIncludes(const FormatStyle &Style,
   for (unsigned i = 0, e = Includes.size(); i != e; ++i) {
     Indices.push_back(i);
   }
-  llvm::stable_sort(Indices, [&](unsigned LHSI, unsigned RHSI) {
-    return std::tie(Includes[LHSI].Priority, Includes[LHSI].Filename) <
-           std::tie(Includes[RHSI].Priority, Includes[RHSI].Filename);
-  });
+  
+  if (Style.SortIncludes ==
+      FormatStyle::IncludeSortStyle::ISS_SortCaseInsensitive) {
+    llvm::stable_sort(Indices, [&](unsigned LHSI, unsigned RHSI) {
+      return std::tie(Includes[LHSI].Priority,
+                      Includes[LHSI].Filename.lower()) <
+             std::tie(Includes[RHSI].Priority, Includes[RHSI].Filename.lower());
+    });
+  } else {
+    llvm::stable_sort(Indices, [&](unsigned LHSI, unsigned RHSI) {
+      return std::tie(Includes[LHSI].Priority, Includes[LHSI].Filename) <
+             std::tie(Includes[RHSI].Priority, Includes[RHSI].Filename);
+    });
+  }
   // The index of the include on which the cursor will be put after
   // sorting/deduplicating.
   unsigned CursorIndex;
@@ -2527,7 +2550,7 @@ tooling::Replacements sortIncludes(const FormatStyle &Style, StringRef Code,
                                    ArrayRef<tooling::Range> Ranges,
                                    StringRef FileName, unsigned *Cursor) {
   tooling::Replacements Replaces;
-  if (!Style.SortIncludes)
+  if (Style.SortIncludes == FormatStyle::IncludeSortStyle::ISS_DontSort)
     return Replaces;
   if (isLikelyXml(Code))
     return Replaces;
@@ -2847,6 +2870,13 @@ const char *StyleOptionHelpDescription =
     "parameters, e.g.:\n"
     "  -style=\"{BasedOnStyle: llvm, IndentWidth: 8}\"";
 
+const char *IncludeSortStyleOptionHelpDescription =
+    "If set, overrides the include sorting behavior determined by the "
+    "SortIncludes style flag\n"
+    "Include sort style, currently supports:\n"
+    "  DontSort, SortCaseSensitive, SortCaseInsensitive, true, false.\n"
+    "True and false are supported for backward compatibility.";
+
 static FormatStyle::LanguageKind getLanguageByFileName(StringRef FileName) {
   if (FileName.endswith(".java"))
     return FormatStyle::LK_Java;
@@ -2891,6 +2921,8 @@ FormatStyle::LanguageKind guessLanguage(StringRef FileName, StringRef Code) {
 const char *DefaultFormatStyle = "file";
 
 const char *DefaultFallbackStyle = "LLVM";
+
+const char *DefaultIncludeSortStyle = "DontSort";
 
 llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,
                                      StringRef FallbackStyleName,
@@ -2975,6 +3007,20 @@ llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,
                              getLanguageName(Style.Language) + ": " +
                              UnsuitableConfigFiles);
   return FallbackStyle;
+}
+
+llvm::Expected<FormatStyle::IncludeSortStyle>
+getIncludeSortStyle(StringRef IncludeSortStyleName, bool AllowUnknownOptions) {
+
+  FormatStyle Style = getNoStyle();
+  // Parse include sort style from the command line. Use YAML parser
+  if (std::error_code ec = parseConfiguration(
+          llvm::MemoryBufferRef(
+              std::string("SortIncludes: " + IncludeSortStyleName.str()),
+              "<command-line>"),
+          &Style, AllowUnknownOptions))
+    return make_string_error("Error parsing -sort-includes: " + ec.message());
+  return Style.SortIncludes;
 }
 
 } // namespace format

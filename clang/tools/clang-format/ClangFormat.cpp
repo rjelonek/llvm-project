@@ -98,11 +98,11 @@ static cl::opt<unsigned>
                     "clang-format from an editor integration"),
            cl::init(0), cl::cat(ClangFormatCategory));
 
-static cl::opt<bool> SortIncludes(
-    "sort-includes",
-    cl::desc("If set, overrides the include sorting behavior determined by the "
-             "SortIncludes style flag"),
-    cl::cat(ClangFormatCategory));
+static cl::opt<std::string>
+    SortIncludes("sort-includes",
+                 cl::desc(clang::format::IncludeSortStyleOptionHelpDescription),
+                 cl::init(clang::format::DefaultIncludeSortStyle),
+                 cl::cat(ClangFormatCategory));
 
 static cl::opt<bool>
     Verbose("verbose", cl::desc("If set, shows the list of processed files"),
@@ -402,8 +402,19 @@ static bool format(StringRef FileName) {
     return true;
   }
 
-  if (SortIncludes.getNumOccurrences() != 0)
-    FormatStyle->SortIncludes = SortIncludes;
+  if (SortIncludes.getNumOccurrences() != 0) {
+    llvm::Expected<FormatStyle::IncludeSortStyle> sortIncludeStyle =
+        getIncludeSortStyle(SortIncludes,
+                            WNoErrorList.isSet(WNoError::Unknown));
+
+  if (!sortIncludeStyle) {
+      llvm::errs() << llvm::toString(sortIncludeStyle.takeError()) << "\n";
+      return true;
+    }
+
+    FormatStyle->SortIncludes = sortIncludeStyle.get();
+  }
+    
   unsigned CursorPosition = Cursor;
   Replacements Replaces = sortIncludes(*FormatStyle, Code->getBuffer(), Ranges,
                                        AssumedFileName, &CursorPosition);

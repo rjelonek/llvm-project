@@ -269,7 +269,7 @@ TEST_F(SortIncludesTest, SupportClangFormatOffCStyle) {
 }
 
 TEST_F(SortIncludesTest, IncludeSortingCanBeDisabled) {
-  FmtStyle.SortIncludes = false;
+  FmtStyle.SortIncludes = FormatStyle::IncludeSortStyle::ISS_DontSort;
   EXPECT_EQ("#include \"a.h\"\n"
             "#include \"c.h\"\n"
             "#include \"b.h\"\n",

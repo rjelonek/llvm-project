@@ -17950,7 +17950,7 @@ TEST_F(ReplacementTest, SortIncludesAfterReplacement) {
                             "#include \"b.h\"\n")});
 
   format::FormatStyle Style = format::getLLVMStyle();
-  Style.SortIncludes = true;
+  Style.SortIncludes = FormatStyle::IncludeSortStyle::ISS_SortCaseSensitive;
   auto FormattedReplaces = formatReplacements(Code, Replaces, Style);
   EXPECT_TRUE(static_cast<bool>(FormattedReplaces))
       << llvm::toString(FormattedReplaces.takeError()) << "\n";
